@@ -8,7 +8,8 @@ from bs4 import BeautifulSoup
 import re,sys
 import requests
 import time
-from datetime import datetime
+#from datetime import datetime
+from dateutil import parser
 import MySQLdb as mdb
 import argparse
 
@@ -25,6 +26,8 @@ parser.add_argument('-d','--delay',default=1,type=float,help='time to sleep betw
 
 global args
 args = parser.parse_args()
+
+HFILENAME = args.soup_dir+'programs-by-date'
 
 con = mdb.connect(args.dbserver,args.dbuser,args.dbpwd,args.dbname)
 cur = con.cursor()
@@ -67,36 +70,49 @@ def local_dump(text,fname):
         f.write(text)
 
 def isoutdated(filename):
-    if filename == 'programs-by-date':
+    # if the home page is updated
         # 7*24*3600 should be replaced by the latest time in database
-        should_time = time.time() - 7*24*3600
+        should_time = time.time() - latest_time
 
         try:
-            file_mod_time = os.path.getatime('programs-by-date')
+            file_mod_time = os.path.getatime(HFILENAME)
+            # if the home page is outdated
+            with open(HFILENAME) as f:
+                pro_soup = BeautifulSoup(f)
+                local_latest_entry = pro_soup.find('div', class_ = 'hentry')
+
+                local_latest_date = local_latest_entry.find('span', class_ = 'date').string.encode('UTF-8')
+                local_latest_date = parser.parse(local_latest_date).strftime('%Y-%m-%d')
+                # maybe a function for standard date is needed
+
+                # if the time is between kkk
+
+            if should_time > file_mod_time:
+                text = requests.get(HOMEPAGE).text
+                local_dump(text,HFILENAME)
+                pro_soup = BeautifulSoup(text)
+                entries = pro_soup.find_all('div', class_ = 'hentry')
+                date = entry.find('span', class_ = 'date').string.encode('UTF-8')
+                return entries
         except OSError as e:
+        # if no home page
             if e.errno == 2:
                 text = requests.get(HOMEPAGE).text
-                local_dump(text,'programs-by-date')
+                local_dump(text,HFILENAME)
                 init_database()
                 #if this file doesn't exist then initiate the database, it's too dogmatic
-                file_mod_time = os.path.getatime('programs-by-date')
+                file_mod_time = os.path.getatime(HFILENAME)
             else:
                 raise
 
         # if it's outdated then refresh. That is, reload the homepage and update the database
-        if should_time > file_mod_time:
-            text = requests.get(HOMEPAGE).text
-            local_dump(text,'programs-by-date')
-            pro_soup = BeautifulSoup(text)
-            entries = pro_soup.find_all('div', class_ = 'hentry')
-            date = entry.find('span', class_ = 'date').string.encode('UTF-8')
-            return entries
         else:
             return False
 
     elif re.match('\d{7}$',filename):
         if not os.path.exists(os.path.join(args.soup_dir,filename)):
-            f
+            text = requests.get(EPISPAGE.format(num=filename)).text
+            local_dump(text,filename)
 
 
 
@@ -104,7 +120,8 @@ def isoutdated(filename):
 def dump_the_hentry(hentry):
     'insert all into hentry table'
     date = hentry.find('span', class_ = 'date').string.encode('UTF-8')
-    date = datetime.strptime(date,'%A %d $B, %Y')
+    date = parser.parse(date).strftime('%Y-%m-%d')
+    
     epi_link = hentry.find('a', class_ = 'details')['href'].encode('UTF-8')
     epiShortNumber = epi_link[-11:-4]
     bookmark = hentry.find('a', class_ = 'entry-title').string.encode('UTF-8')
