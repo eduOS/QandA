@@ -10,15 +10,30 @@ import requests
 import time
 from datetime import datetime
 import MySQLdb as mdb
+import argparse
 
-con = mdb.connect('localhost',"root","104064",'QandA')
+HOMEPAGE = 'http://www.abc.net.au/tv/qanda/past-programs-by-date.htm'
+
+parser = argparse.ArgumentParser(description = 'dump data from QandA to database.')
+parser.add_argument('dbserver', nargs='?', default='localhost',help='input your database server.')
+parser.add_argument('dbuser', nargs='?', default='root',help='input your database username.')
+parser.add_argument('dbpwd', nargs='?', default='0123456789',help='input your database password.')
+parser.add_argument('dbname', nargs='?', default='qanda',help='input your database database name.')
+parser.add_argument('soup_dir', nargs='?', default=default='./soupfiles',help='set the soup directory')
+parser.add_argument('-d','--delay',default=1,type=float,help='time to sleep between downloads, in seconds')
+
+global args
+args = parser.parse_args()
+
+con = mdb.connect(args.dbserver,args.dbuser,args.dbpwd,args.dbname)
 cur = con.cursor()
 
 fakeID = 1000000
-time.strftime("%Y-%m-%d")
+global today
+today = time.strftime("%Y-%m-%d")
 # update automatically a week later / every Tuesday
 
-def create_tables():
+def init_database():
     cur.execute('DROP TABLE IF EXISTS hentry')
     cur.execute(
         "CREATE TABLE `hentry` ("
@@ -27,24 +42,55 @@ def create_tables():
         "   `entryTitle` VARCHAR(60) NOT NULL,"
         "   `bookmark` VARCHAR(300) NOT NULL,"
         "   `videoLink` varchar(100),"
-        "   `questions` TEXT NOT NULL,"
-        "   `transcript` MEDIUMTEXT NOT NULL,"
-        "   PRIMARY KEY (`shortNumber`)"
-        ") engine=InnoDB")
+        "   PRIMARY KEY (`epiShortNumber`)"
+        ") ENGINE=INNODB")
     
+    cur.execute(
+        "CREATE TABLE `qanda` ("
+        "   `questionNumber` VARCHAR(12),"
+        "   `questions` VARCHAR(15000) NOT NULL,"
+        "   `transcript` TEXT NOT NULL,"
+        "   PRIMARY KEY (`questionNumber`)"
+        ") ENGINE=INNODB")
+
     cur.execute('DROP TABLE IF EXISTS henPan')
     cur.execute("""CREATE TABLE henPan(epiShortNumber VARCHAR(10) NOT NULL, \
                                      panelNameTag VARCHAR(50) NOT NULL)""")
     
     cur.execute('DROP TABLE IF EXISTS panellist')
-    cur.execute('CREATE TABLE panellist(panelNameTag VARCHAR(50) NOT NULL PRIMARY KEY, panelName VARCHAR(40) NOT NULL, panelPhotoNumber VARCHAR(10), panelProfile VARCHAR(5000) NOT NULL)')
+    cur.execute('CREATE TABLE panellist(panelNameTag VARCHAR(50) NOT NULL PRIMARY KEY, panelName VARCHAR(40) NOT NULL, panelPhotoNumber VARCHAR(10), panelProfile VARCHAR(6000) NOT NULL)')
     #                                    panellIdentity VARCHAR(40), \
 
-def retrieve_entries():
-    pro_soup = BeautifulSoup(requests.get('http://www.abc.net.au/tv/qanda/past-programs-by-date.htm').text)
-    entries = pro_soup.find_all('div', class_ = 'hentry')
-    # pass one date and get all new entries only
-    return entries
+def local_dump(text,fname):
+    with open(fname) as f:
+        f.write(text)
+
+def isoutdated(filename):
+    # 7*24*3600 should be replaced by the latest time in database
+    should_time = time.time() - 7*24*3600
+
+    try:
+        file_mod_time = os.path.getatime('programs-by-date')
+    except OSError as e:
+        if e.errno == 2:
+            text = requests.get(HOMEPAGE).text
+            local_dump(text,'programs-by-date')
+            init_database()
+            #if this file doesn't exist then initiate the database, it's too dogmatic
+            file_mod_time = os.path.getatime('programs-by-date')
+        else:
+            raise
+
+    # if it's outdated then refresh. That is, reload the homepage and update the database
+    if should_time > file_mod_time:
+        text = requests.get(HOMEPAGE).text
+        local_dump(text,'programs-by-date')
+        pro_soup = BeautifulSoup(text)
+        entries = pro_soup.find_all('div', class_ = 'hentry')
+        date = entry.find('span', class_ = 'date').string.encode('UTF-8')
+        return entries
+    else:
+        return False
 
 def dump_the_hentry(hentry):
     'insert all into hentry table'
@@ -96,12 +142,12 @@ def dump_panellist(epi_soup):
 
 
 class QandA:
-    @staticmethod
-    def init_database():
-        # create table
-        create_tables()
-        # retrieve all entries from the home page
-        hentries = retrieve_entries()
+#    @staticmethod
+#    def init_database():
+#        # create table
+#        create_tables()
+#        # retrieve all entries from the home page
+#        hentries = retrieve_entries()
         
         # insert all data
         
