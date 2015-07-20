@@ -5,7 +5,7 @@
 
 from urllib2 import urlopen
 from bs4 import BeautifulSoup
-import re,sys
+import re,sys,os.path,os,errno
 import requests
 import time
 #from datetime import datetime
@@ -27,7 +27,8 @@ parser.add_argument('-d','--delay',default=1,type=float,help='time to sleep betw
 global args
 args = parser.parse_args()
 
-HFILENAME = args.soup_dir+'programs-by-date'
+HFILENAME = args.soup_dir+'/programs-by-date'
+EFILENAME = args.soup_dir+'/{num}'
 
 con = mdb.connect(args.dbserver,args.dbuser,args.dbpwd,args.dbname)
 cur = con.cursor()
@@ -43,7 +44,7 @@ def init_database():
         "CREATE TABLE `hentry` ("
         "   `epiShortNumber` VARCHAR(10) NOT NULL,"
         "   `hentryDate` VARCHAR(30) NOT NULL,"
-        "   `entryTitle` VARCHAR(60) NOT NULL,"
+        "   `epiLink` VARCHAR(60) NOT NULL,"
         "   `bookmark` VARCHAR(300) NOT NULL,"
         "   `videoLink` varchar(100),"
         "   PRIMARY KEY (`epiShortNumber`)"
@@ -52,6 +53,7 @@ def init_database():
     cur.execute(
         "CREATE TABLE `qanda` ("
         "   `questionNumber` VARCHAR(12),"
+        # questionNumber is the episodenumber appending the question number
         "   `questions` VARCHAR(15000) NOT NULL,"
         "   `transcript` TEXT NOT NULL,"
         "   PRIMARY KEY (`questionNumber`)"
@@ -69,64 +71,33 @@ def local_dump(text,fname):
     with open(fname) as f:
         f.write(text)
 
-def isoutdated(filename):
-    # if the home page is updated
-        # 7*24*3600 should be replaced by the latest time in database
-        should_time = time.time() - latest_time
+def get_new_soup():
+    pass
 
-        try:
-            file_mod_time = os.path.getatime(HFILENAME)
-            # if the home page is outdated
-            with open(HFILENAME) as f:
-                pro_soup = BeautifulSoup(f)
-                local_latest_entry = pro_soup.find('div', class_ = 'hentry')
-
-                local_latest_date = local_latest_entry.find('span', class_ = 'date').string.encode('UTF-8')
-                local_latest_date = parser.parse(local_latest_date).strftime('%Y-%m-%d')
-                # maybe a function for standard date is needed
-
-                # if the time is between kkk
-
-            if should_time > file_mod_time:
-                text = requests.get(HOMEPAGE).text
-                local_dump(text,HFILENAME)
-                pro_soup = BeautifulSoup(text)
-                entries = pro_soup.find_all('div', class_ = 'hentry')
-                date = entry.find('span', class_ = 'date').string.encode('UTF-8')
-                return entries
-        except OSError as e:
-        # if no home page
-            if e.errno == 2:
-                text = requests.get(HOMEPAGE).text
-                local_dump(text,HFILENAME)
-                init_database()
-                #if this file doesn't exist then initiate the database, it's too dogmatic
-                file_mod_time = os.path.getatime(HFILENAME)
-            else:
-                raise
-
-        # if it's outdated then refresh. That is, reload the homepage and update the database
+def dump_epi(epiShortNumber):
+    epi_soup = ''
+    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
+    try:
+        file_handle = os.open(EFILENAME.format(num=epiShortNumber))
+    except OSError as e:
+        # that episode already exists
+        if e.errno == errno.EEXIST:
+            with os.fdopen(file_handle,'r') as file_obj:
+                epi_soup = BeautifulSoup(f)
         else:
-            return False
+        # something unexpected happened
+            raise
+    else:
+        # file doesn't exist and open the file successfully
+        text = requests.get(EPISPAGE.format(num=epiShortNumber)).text
+        with os.fdopen(file_handle,'w') as file_obj:
+            file_obj.write(text)
+        epi_soup = BeautifulSoup(text)
 
-    elif re.match('\d{7}$',filename):
-        if not os.path.exists(os.path.join(args.soup_dir,filename)):
-            text = requests.get(EPISPAGE.format(num=filename)).text
-            local_dump(text,filename)
-
-
-
-
-def dump_the_hentry(hentry):
-    'insert all into hentry table'
-    date = hentry.find('span', class_ = 'date').string.encode('UTF-8')
-    date = parser.parse(date).strftime('%Y-%m-%d')
-    
-    epi_link = hentry.find('a', class_ = 'details')['href'].encode('UTF-8')
-    epiShortNumber = epi_link[-11:-4]
-    bookmark = hentry.find('a', class_ = 'entry-title').string.encode('UTF-8')
-    epi_soup = BeautifulSoup(requests.get(epi_link).text)
     videoLink = epi_soup.find('li', class_ = 'download')
+
+    sql = 'INSERT INTO hentry (epiShortNumber, hentryDate, epiLink, bookmark) VALUES(%s,%s,%s,%s)'
+    cur.execute(sql,(epiShortNumber,date,epi_link,bookmark))
 
     if videoLink:
         videoLink = videoLink.find('a')['href'].encode('UTF-8')
@@ -137,10 +108,82 @@ def dump_the_hentry(hentry):
     questions = epi_soup.find('div', id = 'questions').text.encode('UTF-8')
     transcript = epi_soup.find('div', id = 'transcript').text.encode('UTF-8')
 
-    sql = 'INSERT INTO hentry VALUES(%s,%s,%s,%s,%s,%s,%s)'
-    cur.execute(sql,(epiShortNumber,date,epi_link,bookmark,videoLink,questions,transcript,))
+def dump_entries(entries):
+    for entry in entries:
+        'insert all into hentry table'
+        date = hentry.find('span', class_ = 'date').string.encode('UTF-8')
+        date = parser.parse(date).strftime('%Y-%m-%d')
+        
+        epi_link = hentry.find('a', class_ = 'details')['href'].encode('UTF-8')
+        epiShortNumber = epi_link[-11:-4]
+        bookmark = hentry.find('a', class_ = 'entry-title').string.encode('UTF-8')
+        #all the above are available
+        sql = 'INSERT INTO hentry (epiShortNumber, hentryDate, epiLink, bookmark) VALUES(%s,%s,%s,%s)'
+        cur.execute(sql,(epiShortNumber,date,epi_link,bookmark))
+        dump_epi(epiShortNumber)
 
-    return epi_soup
+def initiate():
+    text = requests.get(HOMEPAGE).text
+    local_dump(text,HFILENAME)
+    init_database()
+    #if this file doesn't exist then initiate the database, it's too dogmatic
+    remote_soup = BeautifulSoup(remote_text)
+    remote_latest_entries = pro_soup.find_all('div', class_ = 'hentry')
+    # not return but dump the database
+    return remote_latest_entries
+
+
+def refresh():
+    # if the home page is updated
+        # 7*24*3600 should be replaced by the latest time in database
+
+    try:
+        file_mod_time = os.path.getatime(HFILENAME)
+        print 'You updated the database %s ago. Continue?[y/n] ' % str(int((time.time()-file_mod_time)/86400))
+        if sys.stdin.read(1) == 'n':
+            break
+        else:
+            # should be detailed further
+            pass
+        # if the home page is outdated
+        with open(HFILENAME) as f:
+            local_soup = BeautifulSoup(f)
+            local_latest_entry = pro_soup.find('div', class_ = 'hentry')
+
+            local_latest_date = local_latest_entry.find('span', class_ = 'date').string
+#                local_latest_date = parser.parse(local_latest_date).strftime('%Y-%m-%d')
+            remote_text = requests.get(HOMEPAGE).text
+            remote_soup = BeautifulSoup(remote_text)
+            remote_latest_entry = pro_soup.find('div', class_ = 'hentry')
+            remote_latest_entries = pro_soup.find_all('div', class_ = 'hentry')
+            remote_latest_date = local_latest_entry.find('span', class_ = 'date').string
+
+            nu_new = int((parser.parse(remote_latest_date)-parser.parse(local_latest_date))/604800)
+            if nu_new > 0:
+                return remote_latest_entries[:nu_new]
+            else:
+                print 'Nothing new.'
+                break
+
+    except OSError as e:
+    # if no home page
+        if e.errno == 2:
+            initiate()
+        else:
+            raise
+
+    # if it's outdated then refresh. That is, reload the homepage and update the database
+    else:
+        return False
+
+#    elif re.match('\d{7}$',filename):
+#        if not os.path.exists(os.path.join(args.soup_dir,filename)):
+#            text = requests.get(EPISPAGE.format(num=filename)).text
+#            local_dump(text,filename)
+
+
+
+
 
 def dump_panellist(epi_soup):
 
