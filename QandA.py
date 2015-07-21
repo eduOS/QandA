@@ -50,12 +50,14 @@ def init_database():
         "   PRIMARY KEY (`epiShortNumber`)"
         ") ENGINE=INNODB")
     
+    cur.execute('DROP TABLE IF EXISTS qanda')
     cur.execute(
         "CREATE TABLE `qanda` ("
-        "   `questionNumber` VARCHAR(12),"
+        "   `questionNumber` VARCHAR(12) NOT NULL,"
+        "   `topic` VARCHAR(30),"
         # questionNumber is the episodenumber appending the question number
-        "   `questions` VARCHAR(15000) NOT NULL,"
-        "   `transcript` TEXT NOT NULL,"
+        "   `question` VARCHAR(15000) NOT NULL,"
+        "   `answers` TEXT NOT NULL,"
         "   PRIMARY KEY (`questionNumber`)"
         ") ENGINE=INNODB")
 
@@ -96,17 +98,20 @@ def dump_epi(epiShortNumber):
 
     videoLink = epi_soup.find('li', class_ = 'download')
 
-    sql = 'INSERT INTO hentry (epiShortNumber, hentryDate, epiLink, bookmark) VALUES(%s,%s,%s,%s)'
-    cur.execute(sql,(epiShortNumber,date,epi_link,bookmark))
-
     if videoLink:
         videoLink = videoLink.find('a')['href'].encode('UTF-8')
-    else:
-        fakeID += 100
-        videoLink = str(fakeID)
+        sql = 'UPDATE hentry SET videoLink=%s WHERE epiShortNumber=%s'
+        cur.execute(sql,(videoLink,epiShortNumber))
 
+
+        "   `questionNumber` VARCHAR(12) NOT NULL,"
+        "   `topic` VARCHAR(30),"
+        # questionNumber is the episodenumber appending the question number
+        "   `question` VARCHAR(15000) NOT NULL,"
+        "   `answers` TEXT NOT NULL,"
+
+    transcript = epi_soup.find('div', id = 'transcript')
     questions = epi_soup.find('div', id = 'questions').text.encode('UTF-8')
-    transcript = epi_soup.find('div', id = 'transcript').text.encode('UTF-8')
 
 def dump_entries(entries):
     for entry in entries:
