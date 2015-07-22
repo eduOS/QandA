@@ -4,7 +4,7 @@
 # -*- coding: utf-8 -*-
 
 from urllib2 import urlopen
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup as BS
 import re,sys,os.path,os,errno
 import requests
 import time
@@ -85,7 +85,7 @@ def dump_epi(epiShortNumber):
         # that episode already exists
         if e.errno == errno.EEXIST:
             with os.fdopen(file_handle,'r') as file_obj:
-                epi_soup = BeautifulSoup(f)
+                epi_soup = BS(f)
         else:
         # something unexpected happened
             raise
@@ -94,7 +94,7 @@ def dump_epi(epiShortNumber):
         text = requests.get(EPISPAGE.format(num=epiShortNumber)).text
         with os.fdopen(file_handle,'w') as file_obj:
             file_obj.write(text)
-        epi_soup = BeautifulSoup(text)
+        epi_soup = BS(text)
 
     videoLink = epi_soup.find('li', class_ = 'download')
 
@@ -103,15 +103,18 @@ def dump_epi(epiShortNumber):
         sql = 'UPDATE hentry SET videoLink=%s WHERE epiShortNumber=%s'
         cur.execute(sql,(videoLink,epiShortNumber))
 
+    transcript_soup = epi_soup.find('div', id = 'transcript')
+    qandas = re.split('<span id=\"',str(transcript_soup))
 
-        "   `questionNumber` VARCHAR(12) NOT NULL,"
-        "   `topic` VARCHAR(30),"
-        # questionNumber is the episodenumber appending the question number
-        "   `question` VARCHAR(15000) NOT NULL,"
-        "   `answers` TEXT NOT NULL,"
-
-    transcript = epi_soup.find('div', id = 'transcript')
-    questions = epi_soup.find('div', id = 'questions').text.encode('UTF-8')
+    for qanda in qandas[1:]:
+        t,a = re.split('</span>',qanda)
+        qnumber = t[0:2]
+        questionNumber = epiShortNumber+'-'+qnumber
+        question = a.split('<br/>')[1]
+        topic = t[4:]
+        answers = BS(''.join(a.split('<br/>')[2:])).text
+        sql = 'INSERT INTO qanda (questionNumber, topic, question, answers) VALUES(%s,%s,%s,%s)'
+        cur.execute(sql,(questionNumber,topic,question,answers))
 
 def dump_entries(entries):
     for entry in entries:
@@ -132,7 +135,7 @@ def initiate():
     local_dump(text,HFILENAME)
     init_database()
     #if this file doesn't exist then initiate the database, it's too dogmatic
-    remote_soup = BeautifulSoup(remote_text)
+    remote_soup = BS(remote_text)
     remote_latest_entries = pro_soup.find_all('div', class_ = 'hentry')
     # not return but dump the database
     return remote_latest_entries
@@ -152,13 +155,13 @@ def refresh():
             pass
         # if the home page is outdated
         with open(HFILENAME) as f:
-            local_soup = BeautifulSoup(f)
+            local_soup = BS(f)
             local_latest_entry = pro_soup.find('div', class_ = 'hentry')
 
             local_latest_date = local_latest_entry.find('span', class_ = 'date').string
 #                local_latest_date = parser.parse(local_latest_date).strftime('%Y-%m-%d')
             remote_text = requests.get(HOMEPAGE).text
-            remote_soup = BeautifulSoup(remote_text)
+            remote_soup = BS(remote_text)
             remote_latest_entry = pro_soup.find('div', class_ = 'hentry')
             remote_latest_entries = pro_soup.find_all('div', class_ = 'hentry')
             remote_latest_date = local_latest_entry.find('span', class_ = 'date').string
