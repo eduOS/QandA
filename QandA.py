@@ -80,7 +80,7 @@ def dump_epi(epiShortNumber):
     epi_soup = ''
     flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
     try:
-        file_handle = os.open(EFILENAME.format(num=epiShortNumber))
+        file_handle = os.open(EFILENAME.format(num=epiShortNumber),flags)
     except OSError as e:
         # that episode already exists
         if e.errno == errno.EEXIST:
@@ -110,11 +110,13 @@ def dump_epi(epiShortNumber):
         t,a = re.split('</span>',qanda)
         qnumber = t[0:2]
         questionNumber = epiShortNumber+'-'+qnumber
-        question = a.split('<br/>')[1]
-        topic = t[4:]
-        answers = BS(''.join(a.split('<br/>')[2:])).text
+        question = a.split('<br/>')[1].encode('UTF-8')
+        topic = t[4:].encode('UTF-8')
+        answers = BS(''.join(a.split('<br/>')[2:])).text.encode('UTF-8')
         sql = 'INSERT INTO qanda (questionNumber, topic, question, answers) VALUES(%s,%s,%s,%s)'
         cur.execute(sql,(questionNumber,topic,question,answers))
+
+    dump_panellists()
 
 def dump_entries(entries):
     for entry in entries:
@@ -138,7 +140,7 @@ def initiate():
     remote_soup = BS(remote_text)
     remote_latest_entries = pro_soup.find_all('div', class_ = 'hentry')
     # not return but dump the database
-    return remote_latest_entries
+    dump_entries(remote_latest_entries)
 
 
 def refresh():
@@ -168,7 +170,7 @@ def refresh():
 
             nu_new = int((parser.parse(remote_latest_date)-parser.parse(local_latest_date))/604800)
             if nu_new > 0:
-                return remote_latest_entries[:nu_new]
+                dump_entries(remote_latest_entries[:nu_new])
             else:
                 print 'Nothing new.'
                 break
@@ -176,36 +178,33 @@ def refresh():
     except OSError as e:
     # if no home page
         if e.errno == 2:
+            print 'initiate the database'
             initiate()
         else:
             raise
 
     # if it's outdated then refresh. That is, reload the homepage and update the database
     else:
-        return False
+        print 'unexpected error'
 
-#    elif re.match('\d{7}$',filename):
-#        if not os.path.exists(os.path.join(args.soup_dir,filename)):
-#            text = requests.get(EPISPAGE.format(num=filename)).text
-#            local_dump(text,filename)
-
-
-
-
-
-def dump_panellist(epi_soup):
+def dump_panellists(epiShortNumber):
+    try:
+        with open(EFILENAME.format(num=epiShortNumber),'r') as f:
+            epi_soup = BS(f)
+    except:
+        print epiShortNumber + 'does not exist locally'
 
     presenters = epi_soup.find_all('div', class_ = 'presenter')
 
     for presenter in presenters:
-        panel_panel_ID = presenter.find('img')
-        if panel_ID:
-            panel_ID = ID['src'][-11:-4]
-        else:
-            panel_ID = str(fakeID)
-            fakepanel_ID += 1
-        name = presenter.find('a').text.encode('UTF-8')
-        profile = presenter.find('p').text.encode('UTF-8')
+        panel_NAME = presenter.find('a')['name'].encode('UTF-8')
+        panel_name = presenter.find('a').text.encode('UTF-8')
+
+        panel_pic_ID = presenter.find('img')
+        if panel_pic_ID:
+            panel_pic_ID = panel_pic_ID['src'][-11:-4]
+
+        panel_profile = presenter.find('p').text.encode('UTF-8')
 
         sql = 'INSERT INTO henPan VALUES(%s,%s)'
         cur.execute(sql,(epi_ID,panel_ID,))
