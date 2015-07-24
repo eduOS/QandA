@@ -8,7 +8,6 @@ from bs4 import BeautifulSoup as BS
 import re,sys,os.path,os,errno
 import requests
 import time
-#from datetime import datetime
 from dateutil import parser
 import MySQLdb as mdb
 import argparse
