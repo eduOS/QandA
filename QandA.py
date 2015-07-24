@@ -33,11 +33,6 @@ EFILENAME = args.soup_dir+'/{num}'
 con = mdb.connect(args.dbserver,args.dbuser,args.dbpwd,args.dbname)
 cur = con.cursor()
 
-fakeID = 1000000
-global today
-today = time.strftime("%Y-%m-%d")
-# update automatically a week later / every Tuesday
-
 def init_database():
     cur.execute('DROP TABLE IF EXISTS hentry')
     cur.execute(
