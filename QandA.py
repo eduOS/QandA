@@ -135,12 +135,12 @@ def dump_epi(epiShortNumber):
         videoLink = 0
 
     transcript_soup = epi_soup.find('div', id = 'transcript')
-    qandas = re.split('<span id=\"',str(transcript_soup))
+    qandas = transcript_soup.find_all('span')
 
+    qnum = 1
     for qanda in qandas[1:]:
-        t,a = re.split('</span>',qanda)
-        qNumber,topic = t.split('">')
-        question = a.split('<br/>')[1]
+        topic = qanda.text
+        question = qanda.nextSibling.nextSibling
         answers = BS(''.join(a.split('<br/>')[2:])).text.encode('UTF-8')
         sql = 'INSERT INTO qanda (epiShortNumber, questionNumber, topic, question, answers) VALUES(%s,%s,%s,%s,%s)'
         cur.execute(sql,(epiShortNumber,qNumber,topic,question,answers,))
@@ -181,7 +181,7 @@ def refresh():
 
     try:
         file_mod_time = os.path.getatime(HFILENAME)
-        print 'You updated the database %s ago. Continue?[y/n] ' % str(int((time.time()-file_mod_time)/86400))
+        print 'You updated the database %s days ago. Continue?[y/n] ' % str(int((time.time()-file_mod_time)/86400))
         if sys.stdin.read(1) == 'n':
             sys.exit(0)
         else:
@@ -201,6 +201,17 @@ def refresh():
             remote_latest_entry = pro_soup.find('div', class_ = 'hentry')
             remote_latest_entries = pro_soup.find_all('div', class_ = 'hentry')
             remote_latest_date = local_latest_entry.find('span', class_ = 'date').string
+    soup = BeautifulSoup(input)
+    
+    for br in soup.findAll('br'):
+        next = br.nextSibling
+        if not (next and isinstance(next,NavigableString)):
+            continue
+        next2 = next.nextSibling
+        if next2 and isinstance(next2,Tag) and next2.name == 'br':
+            text = str(next).strip()
+            if text:
+                print "Found:", next
 
             nu_new = int((parser.parse(remote_latest_date)-parser.parse(local_latest_date))/604800)
             if nu_new > 0:
