@@ -59,8 +59,9 @@ def init_database():
         ") ENGINE=INNODB")
 
     cur.execute('DROP TABLE IF EXISTS henPan')
-    cur.execute("""CREATE TABLE henPan(epiShortNumber VARCHAR(12) NOT NULL, \
-                                     panelID SMALLINT NOT NULL)""")
+    cur.execute("""CREATE TABLE henPan(id SMALLINT NOT NULL AUTO_INCREMENT PRIMARY KEY\
+                                       epiShortNumber VARCHAR(12) NOT NULL, \
+                                       panelName VARCHAR(50) NOT NULL)""")
     
     cur.execute('DROP TABLE IF EXISTS panellist')
     cur.execute('CREATE TABLE panellist(id SMALLINT NOT NULL AUTO_INCREMENT, panelName VARCHAR(50) NOT NULL, panelPicID VARCHAR(10), panelProfile VARCHAR(8000) NOT NULL,PRIMARY KEY (id))')
@@ -94,11 +95,11 @@ def dump_panellists(epiShortNumber):
 
         panel_profile = presenter.find('p').text.encode('UTF-8')
 
-        sql = 'INSERT INTO panellist VALUES(null,%s,%s,%s)'
+        sql = 'INSERT INTO panellist VALUES(%s,%s,%s)'
         cur.execute(sql,(panel_name,panel_pic_ID,panel_profile,))
 
-        sql = 'INSERT INTO henPan VALUES(%s,LAST_INSERT_ID())'
-        cur.execute(sql,(epiShortNumber,))
+        sql = 'INSERT INTO henPan VALUES(%s,%s)'
+        cur.execute(sql,(epiShortNumber,panel_name))
         # the table henpan shoulbe be modified: making episode number and panellist's panel_ID as foreign key
 
 def dump_epi(epiShortNumber):
