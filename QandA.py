@@ -60,7 +60,7 @@ def init_database():
 
     cur.execute('DROP TABLE IF EXISTS henPan')
     cur.execute("""CREATE TABLE henPan(epiShortNumber VARCHAR(12) NOT NULL, \
-                                     panelID VARCHAR(50) NOT NULL)""")
+                                     panelID SMALLINT NOT NULL)""")
     
     cur.execute('DROP TABLE IF EXISTS panellist')
     cur.execute('CREATE TABLE panellist(id SMALLINT NOT NULL AUTO_INCREMENT, panelName VARCHAR(50) NOT NULL, panelPicID VARCHAR(10), panelProfile VARCHAR(8000) NOT NULL,PRIMARY KEY (id))')
