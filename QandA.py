@@ -59,7 +59,7 @@ def init_database():
         ") ENGINE=INNODB")
 
     cur.execute('DROP TABLE IF EXISTS henPan')
-    cur.execute("""CREATE TABLE henPan(id SMALLINT NOT NULL AUTO_INCREMENT PRIMARY KEY\
+    cur.execute("""CREATE TABLE henPan(id SMALLINT NOT NULL AUTO_INCREMENT PRIMARY KEY,\
                                        epiShortNumber VARCHAR(12) NOT NULL, \
                                        panelName VARCHAR(50) NOT NULL)""")
     
@@ -99,7 +99,7 @@ def dump_panellists(epiShortNumber):
         cur.execute(sql,(panel_name,panel_pic_ID,panel_profile,))
 
         sql = 'INSERT INTO henPan VALUES(%s,%s)'
-        cur.execute(sql,(epiShortNumber,panel_name))
+        cur.execute(sql,(epiShortNumber,panel_name,))
         # the table henpan shoulbe be modified: making episode number and panellist's panel_ID as foreign key
 
 def dump_epi(epiShortNumber):
@@ -201,7 +201,7 @@ def refresh():
             remote_latest_entry = pro_soup.find('div', class_ = 'hentry')
             remote_latest_entries = pro_soup.find_all('div', class_ = 'hentry')
             remote_latest_date = local_latest_entry.find('span', class_ = 'date').string
-    soup = BeautifulSoup(input)
+    soup = BS(input)
     
     for br in soup.findAll('br'):
         next = br.nextSibling
