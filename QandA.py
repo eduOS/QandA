@@ -14,6 +14,7 @@ import argparse
 
 HOMEPAGE = 'http://www.abc.net.au/tv/qanda/past-programs-by-date.htm'
 EPISPAGE = 'http://www.abc.net.au/tv/qanda/txt/s{num}.htm'
+TOCOMPLECATEDTOMATCH = 'Too complecated to match the question.'
 
 argparser = argparse.ArgumentParser(description = 'dump data from QandA to database.')
 argparser.add_argument('dbpwd', nargs='?', default='0123456789',help='input your database password.')
@@ -97,14 +98,16 @@ def dump_panellists(epiShortNumber):
             panel_pic_ID = 0
         # if panle pic id doesn't exist then id should be none rather than 0, so this should be bolished
 
-        panel_profile = presenter.find('p').text.encode('UTF-8')
+        panel_profile = presenter.find('p').text
 
-        sql = 'INSERT INTO panellist VALUES(%s,%s,%s)'
-        cur.execute(sql,(panel_name,panel_pic_ID,panel_profile,))
+        sql = 'INSERT INTO panellist (panelName, panelPicID, panelProfile) VALUES(%s,%s,%s)'
+        cur.execute(sql,(panel_name,panel_pic_ID,panel_profile))
 
-        sql = 'INSERT INTO henPan VALUES(%s,%s)'
+        sql = 'INSERT INTO henPan (epiShortNumber, panelName) VALUES(%s,%s)'
         cur.execute(sql,(epiShortNumber,panel_name,))
         # the table henpan shoulbe be modified: making episode number and panellist's panel_ID as foreign key
+    con.commit()
+    print epiShortNumber, 'panel committed'
 
 def dump_epi(epiShortNumber):
     epi_soup = None
@@ -118,15 +121,22 @@ def dump_epi(epiShortNumber):
             with open(EFILENAME.format(num=epiShortNumber),'r') as file_obj:
                 epi_soup = BS(file_obj)
                 print 'that episode already exists'
+        #elif e.errno == errno.ENOENT:
+        #    time.sleep(0.2)
+        #    text = requests.get(EPISPAGE.format(num=epiShortNumber)).text
+        #    print epiShortNumber, ' episode page request'
+        #    with os.fdopen(file_handle,'w') as file_obj:
+        #        file_obj.write(text.encode('UTF-8'))
+        #    epi_soup = BS(text)
         else:
         # something unexpected happened
-            raise
             print 'something unexpected happened'
+            raise
     else:
-        # file doesn't exist and open the file successfully
+        # another command but don't trace the error
         time.sleep(0.2)
         text = requests.get(EPISPAGE.format(num=epiShortNumber)).text
-        print 'episode page request'
+        print epiShortNumber, ' episode page request'
         with os.fdopen(file_handle,'w') as file_obj:
             file_obj.write(text.encode('UTF-8'))
         epi_soup = BS(text)
@@ -134,31 +144,48 @@ def dump_epi(epiShortNumber):
         print 'soup loaded'
 
     videoLink = epi_soup.find('li', class_ = 'download')
-
     if videoLink:
         videoLink = videoLink.find('a')['href'].encode('UTF-8')
         sql = 'UPDATE hentry SET videoLink=%s WHERE epiShortNumber=%s'
         cur.execute(sql,(videoLink,epiShortNumber,))
     else:
+        print epiShortNumber, ' no videoLink'
         videoLink = 0
 
-    transcript_soup = epi_soup.find('div', id = 'transcript')
-    qandas = re.split('<span id=', str(transcript_soup))
-    greetings = qanda[0]
+    transcript = str(epi_soup.find('div', id = 'transcript')).replace('<br/>','\n')
+    qandas = re.split('<span id=', transcript)
+    greetings = qandas[0]
 
     for qanda in qandas[1:]:
         try:
-            match = re.match(r'"(q\d{1,2})">(.*)</span><br/>([A-Z ]*:.*?\?)(.*)',qandas[2], re.S).groups()
-            qNumber = match[0]
-            topic = match[1]
+            match = re.match(r'"(q\d{1,2})">(.*)\n{,1}</span>\n{,2}([A-Z ]*:.*?\?)\n{1,2}([A-Z]{1,2}.*)',qanda, re.DOTALL).groups()
             question = match[2]
             answers = match[3]
         except:
-            print 'match problem in epi ',epiShortNumber
-            raise
+            try:
+                match = re.match(r'"(q\d{1,2})">(.*)\n{,1}</span>\n{,2}(.*?\?)\n{,2}(.*)',qanda, re.DOTALL).groups()
+                question = match[2]
+                answers = match[3]
+            except:
+                try:
+                    match = re.match(r'"(q\d{1,2})">(.*)\n{,1}</span>\n{,2}(.*)',qanda, re.DOTALL).groups()
+                    question = TOCOMPLECATEDTOMATCH
+                    answers = match[2]
+                    print TOCOMPLECATEDTOMATCH, epiShortNumber
+                    print qanda
+                except:
+                    print 'cannot match', epiShortNumber
+                    print qanda
+                    raise
+        qNumber = match[0]
+        topic = match[1]
+        if answers == '':
+            print 'error'
+            sys.exit(0)
         sql = 'INSERT INTO qanda (epiShortNumber, questionNumber, topic, question, answers) VALUES(%s,%s,%s,%s,%s)'
         cur.execute(sql,(epiShortNumber,qNumber,topic,question,answers,))
-
+    con.commit()
+    print epiShortNumber, 'scripts committed'
     dump_panellists(epiShortNumber)
 
 def dump_entries(entries):
@@ -236,16 +263,17 @@ def refresh():
         print 'unexpected error'
 
 class QandA:
-    try:
-        refresh()
-    except:
-        con.commit()
-        cur.close()
-        con.close()
+#    try:
+    refresh()
+#    except:
+#        con.commit()
+#        cur.close()
+#        con.close()
         
     con.commit()
     cur.close()
     con.close()
+
 if __name__ == "__main__":
     QandA()
 # cannot fetch data in 2008
