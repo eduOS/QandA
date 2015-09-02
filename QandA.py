@@ -38,9 +38,9 @@ def init_database():
         "CREATE TABLE `hentry` ("
         "   `id` SMALLINT NOT NULL AUTO_INCREMENT,"
         "   `epiShortNumber` VARCHAR(12) NOT NULL,"
-        "   `hentryDate` VARCHAR(20) NOT NULL,"
-        "   `epiLink` VARCHAR(60) NOT NULL,"
-        "   `bookmark` VARCHAR(300) NOT NULL,"
+        "   `hentryDate` VARCHAR(20),"
+        "   `epiLink` VARCHAR(60),"
+        "   `bookmark` VARCHAR(300),"
         "   `videoLink` varchar(100),"
         "   PRIMARY KEY (`id`)"
         ") ENGINE=INNODB")
@@ -67,7 +67,7 @@ def init_database():
     cur.execute('CREATE TABLE panellist(id SMALLINT NOT NULL AUTO_INCREMENT, \
                                         panelName VARCHAR(50) NOT NULL, \
                                         panelPicID VARCHAR(10), \
-                                        panelProfile VARCHAR(8000) NOT NULL, \
+                                        panelProfile VARCHAR(8000), \
                                         PRIMARY KEY (id))')
     #                                    panellIdentity VARCHAR(40), \
 
@@ -122,7 +122,7 @@ def dump_epi(epiShortNumber):
             raise
     else:
         # file doesn't exist and open the file successfully
-        time.sleep(2)
+        time.sleep(0.2)
         text = requests.get(EPISPAGE.format(num=epiShortNumber)).text
         print 'episode page request'
         with os.fdopen(file_handle,'w') as file_obj:
@@ -144,7 +144,7 @@ def dump_epi(epiShortNumber):
 
     for qanda in qandas[1:]:
         try:
-            match = re.match(r'"q(\d{1,2})">(.*)</span><br/>([A-Z ]*:.*?\?)(.*)',qandas[2], re.S).groups()
+            match = re.match(r'"(q\d{1,2})">(.*)</span><br/>([A-Z ]*:.*?\?)(.*)',qandas[2], re.S).groups()
             qNumber = match[0]
             topic = match[1]
             question = match[2]
@@ -173,11 +173,11 @@ def dump_entries(entries):
         print 'finish ' + date + bookmark
 
 def initiate():
-    time.sleep(2)
     text = requests.get(HOMEPAGE).text
     print 'init request'
     local_dump(text,HFILENAME)
     init_database()
+    print 'init init_database'
     #if this file doesn't exist then initiate the database, it's too dogmatic
     remote_soup = BS(text)
     remote_latest_entries = remote_soup.find_all('div', class_ = 'hentry')
@@ -204,25 +204,14 @@ def refresh():
 
             local_latest_date = local_latest_entry.find('span', class_ = 'date').string
 #                local_latest_date = parser.parse(local_latest_date).strftime('%Y-%m-%d')
-            time.sleep(2)
+            time.sleep(0.2)
             remote_text = requests.get(HOMEPAGE).text
             print 'home page request'
             remote_soup = BS(remote_text)
             remote_latest_entry = pro_soup.find('div', class_ = 'hentry')
             remote_latest_entries = pro_soup.find_all('div', class_ = 'hentry')
             remote_latest_date = local_latest_entry.find('span', class_ = 'date').string
-    soup = BS(input)
     
-    for br in soup.findAll('br'):
-        next = br.nextSibling
-        if not (next and isinstance(next,NavigableString)):
-            continue
-        next2 = next.nextSibling
-        if next2 and isinstance(next2,Tag) and next2.name == 'br':
-            text = str(next).strip()
-            if text:
-                print "Found:", next
-
             nu_new = int((parser.parse(remote_latest_date)-parser.parse(local_latest_date))/604800)
             if nu_new > 0:
                 local_dump(remote_soup,HFILENAME)
