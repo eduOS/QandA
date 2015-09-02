@@ -117,9 +117,11 @@ def dump_epi(epiShortNumber):
         if e.errno == errno.EEXIST:
             with open(EFILENAME.format(num=epiShortNumber),'r') as file_obj:
                 epi_soup = BS(file_obj)
+                print 'that episode already exists'
         else:
         # something unexpected happened
             raise
+            print 'something unexpected happened'
     else:
         # file doesn't exist and open the file successfully
         time.sleep(0.2)
@@ -128,6 +130,8 @@ def dump_epi(epiShortNumber):
         with os.fdopen(file_handle,'w') as file_obj:
             file_obj.write(text.encode('UTF-8'))
         epi_soup = BS(text)
+    finally:
+        print 'soup loaded'
 
     videoLink = epi_soup.find('li', class_ = 'download')
 
@@ -158,8 +162,8 @@ def dump_epi(epiShortNumber):
     dump_panellists(epiShortNumber)
 
 def dump_entries(entries):
+    'insert all into hentry table'
     for entry in entries:
-        'insert all into hentry table'
         date = entry.find('span', class_ = 'date').string.encode('UTF-8')
         date = parser.parse(date).strftime('%Y-%m-%d')
         
@@ -177,7 +181,6 @@ def initiate():
     print 'init request'
     local_dump(text,HFILENAME)
     init_database()
-    print 'init init_database'
     #if this file doesn't exist then initiate the database, it's too dogmatic
     remote_soup = BS(text)
     remote_latest_entries = remote_soup.find_all('div', class_ = 'hentry')
