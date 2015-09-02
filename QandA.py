@@ -64,7 +64,11 @@ def init_database():
                                        panelName VARCHAR(50) NOT NULL)""")
     
     cur.execute('DROP TABLE IF EXISTS panellist')
-    cur.execute('CREATE TABLE panellist(id SMALLINT NOT NULL AUTO_INCREMENT, panelName VARCHAR(50) NOT NULL, panelPicID VARCHAR(10), panelProfile VARCHAR(8000) NOT NULL,PRIMARY KEY (id))')
+    cur.execute('CREATE TABLE panellist(id SMALLINT NOT NULL AUTO_INCREMENT, \
+                                        panelName VARCHAR(50) NOT NULL, \
+                                        panelPicID VARCHAR(10), 
+                                        panelProfile VARCHAR(8000) NOT NULL,
+                                        PRIMARY KEY (id))')
     #                                    panellIdentity VARCHAR(40), \
 
 def local_dump(text,fname):
@@ -135,13 +139,19 @@ def dump_epi(epiShortNumber):
         videoLink = 0
 
     transcript_soup = epi_soup.find('div', id = 'transcript')
-    qandas = transcript_soup.find_all('span')
+    qandas = re.split('<span id=', str(transcript_soup))
+    greetings = qanda[0]
 
-    qnum = 1
     for qanda in qandas[1:]:
-        topic = qanda.text
-        question = qanda.nextSibling.nextSibling
-        answers = BS(''.join(a.split('<br/>')[2:])).text.encode('UTF-8')
+        try:
+            match = re.match(r'"q(\d{1,2})">(.*)</span><br/>([A-Z ]*:.*?\?)(.*)',qandas[2], re.S).groups()
+            qNumber = match[0]
+            topic = match[1]
+            question = match[2]
+            answers = match[3]
+        except:
+            print 'match problem in epi ',epiShortNumber
+            raise
         sql = 'INSERT INTO qanda (epiShortNumber, questionNumber, topic, question, answers) VALUES(%s,%s,%s,%s,%s)'
         cur.execute(sql,(epiShortNumber,qNumber,topic,question,answers,))
 
