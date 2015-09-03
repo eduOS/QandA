@@ -21,7 +21,7 @@ argparser.add_argument('dbpwd', nargs='?', default='0123456789',help='input your
 argparser.add_argument('dbserver', nargs='?', default='localhost',help='input your database server.')
 argparser.add_argument('dbuser', nargs='?', default='root',help='input your database username.')
 argparser.add_argument('dbname', nargs='?', default='QandA',help='input your database database name.')
-argparser.add_argument('soup_dir', nargs='?', default='../QandAsoupfiles',help='set the soup directory')
+argparser.add_argument('soup_dir', nargs='?', default='./soupfiles',help='set the soup directory')
 argparser.add_argument('-d','--delay',default=1,type=float,help='time to sleep between downloads, in seconds')
 
 global args
