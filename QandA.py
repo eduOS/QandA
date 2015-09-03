@@ -34,8 +34,11 @@ con = mdb.connect(args.dbserver,args.dbuser,args.dbpwd,args.dbname)
 cur = con.cursor()
 
 def write2sql(sql, agms):
-    agms = tuple([agm.encode('utf-8', errors='replace') for agm in agms])
-    cur.execute(sql,agms)
+    try:
+        cur.execute(sql,agms)
+    except:
+        agms = tuple([agm.encode('utf-8', errors='replace') for agm in agms])
+        cur.execute(sql,agms)
 
 def init_database():
     cur.execute('DROP TABLE IF EXISTS hentry')
