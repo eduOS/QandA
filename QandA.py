@@ -115,9 +115,11 @@ def dump_panellists(epiShortNumber):
         executesql(sql,(epiShortNumber,panel_name,))
         # the table henpan shoulbe be modified: making episode number and panellist's panel_ID as foreign key
     con.commit()
+    print 'succeed: ', epiShortNumber
 
 def dump_epi(epiShortNumber):
-    epi_soup = None
+    with open(FILEPATH.format(num=epiShortNumber),'r') as epif:
+        epi_soup = BS(epif)
 
     videoLink = epi_soup.find('li', class_ = 'download')
     if videoLink:
@@ -221,6 +223,7 @@ def dumpEntry(entry):
     sql = 'INSERT INTO hentry (epiShortNumber, hentryDate, epiLink, bookmark) VALUES(%s,%s,%s,%s)'
     executesql(sql,(epiShortNumber,date,epi_link,bookmark,))
 
+    print date,' ', epiShortNumber
     dumpEntryDetail(epiShortNumber)
 
 def refresh():
