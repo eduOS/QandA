@@ -186,14 +186,6 @@ def haveFile(filename):
         local_dump(text, filepath)
         return False
 
-
-#        print epiShortNumber, ' episode page request'
-#        with os.fdopen(file_handle,'w') as file_obj:
-#            file_obj.write(text.encode('UTF-8'))
-#        epi_soup = BS(text)
-#            with open(FILEPATH.format(num=epiShortNumber),'r') as file_obj:
-#                epi_soup = BS(file_obj)
-
 def dumpEntryDetail(entryNum):
     """
     scan if all entries listed on the homepage are dumped into local files and database
@@ -202,8 +194,16 @@ def dumpEntryDetail(entryNum):
     # if in file, then check if is't in database(if the epiShortNumber is in hentry table) if not dump it
     if haveFile(entryNum):
         sql = "select * from hentry where epiShortNumber=%s"
+        sqllast = "select * from hentry where epiShortNumber=%s"
         if not executesql(sql,(entryNum,)):
             dump_epi(entryNum)
+        elif haveFile('2246870') and executesql(sqllast,('2246870',)):
+            # if the last entry has been dumped then exit
+            print 'dumped all entries'
+            cur.close()
+            con.close()
+            sys.exit(0)
+
     else:
         dump_epi(entryNum)
 
