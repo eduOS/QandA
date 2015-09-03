@@ -33,6 +33,10 @@ EFILENAME = args.soup_dir+'/{num}'
 con = mdb.connect(args.dbserver,args.dbuser,args.dbpwd,args.dbname)
 cur = con.cursor()
 
+def write2sql(sql, agms):
+    agms = tuple([agm.encode('utf-8', errors='replace') for agm in agms])
+    cur.execute(sql,agms)
+
 def init_database():
     cur.execute('DROP TABLE IF EXISTS hentry')
     cur.execute(
@@ -89,7 +93,7 @@ def dump_panellists(epiShortNumber):
     presenters = epi_soup.find_all('div', class_ = 'presenter')
 
     for presenter in presenters:
-        panel_name = presenter.find('a').text.encode('UTF-8')
+        panel_name = presenter.find('a').text
 
         panel_pic_ID = presenter.find('img')
         if panel_pic_ID:
@@ -101,10 +105,10 @@ def dump_panellists(epiShortNumber):
         panel_profile = presenter.find('p').text
 
         sql = 'INSERT INTO panellist (panelName, panelPicID, panelProfile) VALUES(%s,%s,%s)'
-        cur.execute(sql,(panel_name,panel_pic_ID,panel_profile))
+        write2sql(sql,(panel_name,panel_pic_ID,panel_profile))
 
         sql = 'INSERT INTO henPan (epiShortNumber, panelName) VALUES(%s,%s)'
-        cur.execute(sql,(epiShortNumber,panel_name,))
+        write2sql(sql,(epiShortNumber,panel_name,))
         # the table henpan shoulbe be modified: making episode number and panellist's panel_ID as foreign key
     con.commit()
     print epiShortNumber, 'panel committed'
@@ -147,7 +151,7 @@ def dump_epi(epiShortNumber):
     if videoLink:
         videoLink = videoLink.find('a')['href'].encode('UTF-8')
         sql = 'UPDATE hentry SET videoLink=%s WHERE epiShortNumber=%s'
-        cur.execute(sql,(videoLink,epiShortNumber,))
+        write2sql(sql,(videoLink,epiShortNumber,))
     else:
         print epiShortNumber, ' no videoLink'
         videoLink = 0
@@ -172,7 +176,7 @@ def dump_epi(epiShortNumber):
         answers = '\n'.join(lines[2:])
         # later each line of the answer can be dumpted to database seperately
         sql = 'INSERT INTO qanda (epiShortNumber, questionNumber, topic, question, answers) VALUES(%s,%s,%s,%s,%s)'
-        cur.execute(sql,(epiShortNumber,qNumber,topic,question,answers))
+        write2sql(sql,(epiShortNumber,qNumber,topic,question,answers))
     con.commit()
     print epiShortNumber, 'scripts committed'
     dump_panellists(epiShortNumber)
@@ -188,17 +192,18 @@ def dump_entries(entries):
         bookmark = entry.find('a', class_ = 'entry-title').string.encode('UTF-8')
         #all the above are available
         sql = 'INSERT INTO hentry (epiShortNumber, hentryDate, epiLink, bookmark) VALUES(%s,%s,%s,%s)'
-        cur.execute(sql,(epiShortNumber,date,epi_link,bookmark,))
+        write2sql(sql,(epiShortNumber,date,epi_link,bookmark,))
         dump_epi(epiShortNumber)
         print 'finish ' + date + bookmark
 
 def initiate():
+    # the function in dump_epi should be divided for the file date check function
     text = requests.get(HOMEPAGE).text
-    print 'init request'
-    local_dump(text,HFILENAME)
-    init_database()
-    #if this file doesn't exist then initiate the database, it's too dogmatic
     remote_soup = BS(text)
+    #with open(HFILENAME) as f:
+    #    remote_soup = BS(f)
+    #init_database()
+    #if this file doesn't exist then initiate the database, it's too dogmatic
     remote_latest_entries = remote_soup.find_all('div', class_ = 'hentry')
     # not return but dump the database
     dump_entries(remote_latest_entries)
