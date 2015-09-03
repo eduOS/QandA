@@ -177,7 +177,7 @@ def haveFile(filename):
     else:
         # if not, request remotely and dump to file
         time.sleep(0.2)
-        if filename == HPNAME
+        if filename == HPNAME:
             text = requests.get(HOMEPAGE).text
         else:
             text = requests.get(EPISPAGE.format(num=filename)).text
@@ -200,7 +200,7 @@ def dumpEntryDetail(entryNum):
     # if in file, then check if is't in database(if the epiShortNumber is in hentry table) if not dump it
     if haveFile(entryNum):
         sql = "select * from hentry where epiShortNumber=%s"
-        if not executesql(sql,(entryNum,)) 
+        if not executesql(sql,(entryNum,)):
             dump_epi(entryNum)
     else:
         dump_epi(entryNum)
@@ -243,24 +243,28 @@ def refresh():
 class QandA:
     try:
         file_mod = os.path.getatime(HFPATH)
-        print 'You updated the database %s days ago. y for update homepage and n for using old homepage?[y/n] ' % str(int((time.time()-file_mod)/86400))
-        if sys.stdin.read(1) == 'y':
+        #print 'You updated the database %s days ago. y for update homepage and n for using old homepage?[y/n] ' % str(int((time.time()-file_mod)/86400))
+        #if sys.stdin.read(1) == 'y':
+        nput = raw_input('You updated the database %s days ago. y for update homepage and n for using old homepage?[y/n] ' % str(int((time.time()-file_mod)/86400))) 
+        if nput == 'y':
             os.remove(HFPATH)
             haveFile(HPNAME)
             refresh()
-        elif sys.stdin.read(1) == 'n':
+        elif nput == 'n':
             refresh()
         else:
             sys.exit(0)
     except OSError as e:
         # that episode already exists
         if e.errno == 2:
-            print 'Seems that you should initiate database?[y/n] '
-            if sys.stdin.read(1) == 'y':
+            nput = raw_input('Seems that you should initiate database?[y/n] ') 
+            if nput == 'y':
                 haveFile(HPNAME)
                 init_database()
                 refresh()
         else:
+            cur.close()
+            con.close()
             sys.exit(0)
         
     cur.close()
