@@ -152,38 +152,27 @@ def dump_epi(epiShortNumber):
         print epiShortNumber, ' no videoLink'
         videoLink = 0
 
-    transcript = str(epi_soup.find('div', id = 'transcript')).replace('<br/>','\n')
-    qandas = re.split('<span id=', transcript)
-    greetings = qandas[0]
+    transcript = str(epi_soup.find('div', id = 'transcript')).replace('<br/><br/>','\n').replace('<br/>','\n')
+    qandas = transcript.split('<span id=')
+    # don't know where to put this 
+    #greetings = qandas[0]
 
     for qanda in qandas[1:]:
+        # don't use match too much, manage the transcript line by line
+        lines = qanda.replace('</span>','\n').replace('\n\n','\n').split('\n')
         try:
-            match = re.match(r'"(q\d{1,2})">(.*)\n{,1}</span>\n{,2}([A-Z ]*:.*?\?)\n{1,2}([A-Z]{1,2}.*)',qanda, re.DOTALL).groups()
-            question = match[2]
-            answers = match[3]
+            match = re.match(r'"(q\d{1,2})">(.*)\n{,1}',lines[0]).groups()
+            qNumber = match[0]
+            topic = match[1]
         except:
-            try:
-                match = re.match(r'"(q\d{1,2})">(.*)\n{,1}</span>\n{,2}(.*?\?)\n{,2}(.*)',qanda, re.DOTALL).groups()
-                question = match[2]
-                answers = match[3]
-            except:
-                try:
-                    match = re.match(r'"(q\d{1,2})">(.*)\n{,1}</span>\n{,2}(.*)',qanda, re.DOTALL).groups()
-                    question = TOCOMPLECATEDTOMATCH
-                    answers = match[2]
-                    print TOCOMPLECATEDTOMATCH, epiShortNumber
-                    print qanda
-                except:
-                    print 'cannot match', epiShortNumber
-                    print qanda
-                    raise
-        qNumber = match[0]
-        topic = match[1]
-        if answers == '':
-            print 'error'
-            sys.exit(0)
+            print 'rules of the changed for ', epiShortNumber
+            print qanda
+            raise
+        question = lines[1]
+        answers = '\n'.join(lines[2:])
+        # later each line of the answer can be dumpted to database seperately
         sql = 'INSERT INTO qanda (epiShortNumber, questionNumber, topic, question, answers) VALUES(%s,%s,%s,%s,%s)'
-        cur.execute(sql,(epiShortNumber,qNumber,topic,question,answers,))
+        cur.execute(sql,(epiShortNumber,qNumber,topic,question,answers))
     con.commit()
     print epiShortNumber, 'scripts committed'
     dump_panellists(epiShortNumber)
