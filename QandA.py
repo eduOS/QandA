@@ -27,18 +27,19 @@ argparser.add_argument('-d','--delay',default=1,type=float,help='time to sleep b
 global args
 args = argparser.parse_args()
 
-HFILENAME = args.soup_dir+'/programs-by-date'
-EFILENAME = args.soup_dir+'/{num}'
+FILEPATH = args.soup_dir+'/{num}'
+HPNAME = 'programs-by-date'
+HFPATH = FILEPATH.format(num=HPNAME)
 
 con = mdb.connect(args.dbserver,args.dbuser,args.dbpwd,args.dbname)
 cur = con.cursor()
 
-def write2sql(sql, agms):
+def executesql(sql, agms):
     try:
-        cur.execute(sql,agms)
-    except:
         agms = tuple([agm.encode('utf-8', errors='replace') for agm in agms])
-        cur.execute(sql,agms)
+        return cur.execute(sql,agms)
+    except:
+        return cur.execute(sql,agms)
 
 def init_database():
     cur.execute('DROP TABLE IF EXISTS hentry')
@@ -87,7 +88,7 @@ def get_new_soup():
     pass
 
 def dump_panellists(epiShortNumber):
-    with open(EFILENAME.format(num=epiShortNumber),'r') as f:
+    with open(FILEPATH.format(num=epiShortNumber),'r') as f:
         epi_soup = BS(f)
 
     presenters = epi_soup.find_all('div', class_ = 'presenter')
@@ -108,49 +109,21 @@ def dump_panellists(epiShortNumber):
         panel_profile = presenter.find('p').text
 
         sql = 'INSERT INTO panellist (panelName, panelPicID, panelProfile) VALUES(%s,%s,%s)'
-        write2sql(sql,(panel_name,panel_pic_ID,panel_profile))
+        executesql(sql,(panel_name,panel_pic_ID,panel_profile))
 
         sql = 'INSERT INTO henPan (epiShortNumber, panelName) VALUES(%s,%s)'
-        write2sql(sql,(epiShortNumber,panel_name,))
+        executesql(sql,(epiShortNumber,panel_name,))
         # the table henpan shoulbe be modified: making episode number and panellist's panel_ID as foreign key
     con.commit()
 
 def dump_epi(epiShortNumber):
     epi_soup = None
-    file_handle = None
-    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
-    try:
-        file_handle = os.open(EFILENAME.format(num=epiShortNumber),flags)
-    except OSError as e:
-        # that episode already exists
-        if e.errno == errno.EEXIST:
-            with open(EFILENAME.format(num=epiShortNumber),'r') as file_obj:
-                epi_soup = BS(file_obj)
-        #elif e.errno == errno.ENOENT:
-        #    time.sleep(0.2)
-        #    text = requests.get(EPISPAGE.format(num=epiShortNumber)).text
-        #    print epiShortNumber, ' episode page request'
-        #    with os.fdopen(file_handle,'w') as file_obj:
-        #        file_obj.write(text.encode('UTF-8'))
-        #    epi_soup = BS(text)
-        else:
-        # something unexpected happened
-            print 'something unexpected happened'
-            raise
-    else:
-        # another command but don't trace the error
-        time.sleep(0.2)
-        text = requests.get(EPISPAGE.format(num=epiShortNumber)).text
-        print epiShortNumber, ' episode page request'
-        with os.fdopen(file_handle,'w') as file_obj:
-            file_obj.write(text.encode('UTF-8'))
-        epi_soup = BS(text)
 
     videoLink = epi_soup.find('li', class_ = 'download')
     if videoLink:
         videoLink = videoLink.find('a')['href'].encode('UTF-8')
         sql = 'UPDATE hentry SET videoLink=%s WHERE epiShortNumber=%s'
-        write2sql(sql,(videoLink,epiShortNumber,))
+        executesql(sql,(videoLink,epiShortNumber,))
     else:
         print epiShortNumber, ' no videoLink'
         videoLink = 0
@@ -182,99 +155,118 @@ def dump_epi(epiShortNumber):
         answers = '\n'.join(lines[2:])
         # later each line of the answer can be dumpted to database seperately
         sql = 'INSERT INTO qanda (epiShortNumber, questionNumber, topic, question, answers) VALUES(%s,%s,%s,%s,%s)'
-        write2sql(sql,(epiShortNumber,qNumber,topic,question,answers))
-    con.commit()
+        executesql(sql,(epiShortNumber,qNumber,topic,question,answers))
     dump_panellists(epiShortNumber)
 
-def dump_entries(entries):
-    'insert all into hentry table'
-    for entry in entries:
-        date = entry.find('span', class_ = 'date').string.encode('UTF-8')
-        date = parser.parse(date).strftime('%Y-%m-%d')
-        
-        epi_link = entry.find('a', class_ = 'details')['href'].encode('UTF-8')
-        epiShortNumber = epi_link[-11:-4]
-        bookmark = entry.find('a', class_ = 'entry-title').string.encode('UTF-8')
-        #all the above are available
-        sql = 'INSERT INTO hentry (epiShortNumber, hentryDate, epiLink, bookmark) VALUES(%s,%s,%s,%s)'
-        write2sql(sql,(epiShortNumber,date,epi_link,bookmark,))
-        dump_epi(epiShortNumber)
-        print 'finish ' + date + bookmark
 
-def initiate():
-    # the function in dump_epi should be divided for the file date check function
-    text = requests.get(HOMEPAGE).text
-    local_dump(text, HFILENAME)
-    remote_soup = BS(text)
-    #with open(HFILENAME) as f:
-    #    remote_soup = BS(f)
 
-    init_database()
-    #if this file doesn't exist then initiate the database, it's too dogmatic
-    remote_latest_entries = remote_soup.find_all('div', class_ = 'hentry')
-    # not return but dump the database
-    dump_entries(remote_latest_entries)
+def haveFile(filename):
+    file_handle = None
+    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
+    filepath = FILEPATH.format(num=filename)
+    try:
+        file_handle = os.open(filepath,flags)
+    except OSError as e:
+        # that episode already exists
+        if e.errno == errno.EEXIST:
+            return True
+        else:
+        # something unexpected happened
+            print 'something unexpected happened'
+            raise
+    else:
+        # if not, request remotely and dump to file
+        time.sleep(0.2)
+        if filename == HPNAME
+            text = requests.get(HOMEPAGE).text
+        else:
+            text = requests.get(EPISPAGE.format(num=filename)).text
+        local_dump(text, filepath)
+        return False
 
+
+#        print epiShortNumber, ' episode page request'
+#        with os.fdopen(file_handle,'w') as file_obj:
+#            file_obj.write(text.encode('UTF-8'))
+#        epi_soup = BS(text)
+#            with open(FILEPATH.format(num=epiShortNumber),'r') as file_obj:
+#                epi_soup = BS(file_obj)
+
+def dumpEntryDetail(entryNum):
+    """
+    scan if all entries listed on the homepage are dumped into local files and database
+    if not, dump them
+    """
+    # if in file, then check if is't in database(if the epiShortNumber is in hentry table) if not dump it
+    if haveFile(entryNum):
+        sql = "select * from hentry where epiShortNumber=%s"
+        if not executesql(sql,(entryNum,)) 
+            dump_epi(entryNum)
+    else:
+        dump_epi(entryNum)
+
+def dumpEntry(entry):
+    """
+    extract short numbers
+    insert into database
+    return entry number
+    """
+    date = entry.find('span', class_ = 'date').string
+    date = parser.parse(date).strftime('%Y-%m-%d')
+    
+    epi_link = entry.find('a', class_ = 'details')['href']
+    epiShortNumber = epi_link[-11:-4]
+    bookmark = entry.find('a', class_ = 'entry-title').string
+    #all the above are available
+    sql = 'INSERT INTO hentry (epiShortNumber, hentryDate, epiLink, bookmark) VALUES(%s,%s,%s,%s)'
+    executesql(sql,(epiShortNumber,date,epi_link,bookmark,))
+
+    dumpEntryDetail(epiShortNumber)
 
 def refresh():
-    # if the home page is updated
-        # 7*24*3600 should be replaced by the latest time in database
-
+    """
+    read entries from local homepage
+    get entries short numbers
+    have entries dumped
+    """
     try:
-        file_mod_time = os.path.getatime(HFILENAME)
-        print 'You updated the database %s days ago. Continue?[y/n] ' % str(int((time.time()-file_mod_time)/86400))
-        if sys.stdin.read(1) == 'n':
-            sys.exit(0)
-        else:
-            # should be detailed further
-            pass
-        # if the home page is outdated
-        with open(HFILENAME) as f:
-            local_soup = BS(f)
-            local_latest_entry = local_soup.find('div', class_ = 'hentry')
-
-            local_latest_date = local_latest_entry.find('span', class_ = 'date').string
-#                local_latest_date = parser.parse(local_latest_date).strftime('%Y-%m-%d')
-            time.sleep(0.2)
-            remote_text = requests.get(HOMEPAGE).text
-            print 'home page request'
-            remote_soup = BS(remote_text)
-            remote_latest_entry = pro_soup.find('div', class_ = 'hentry')
-            remote_latest_entries = pro_soup.find_all('div', class_ = 'hentry')
-            remote_latest_date = local_latest_entry.find('span', class_ = 'date').string
-    
-            nu_new = int((parser.parse(remote_latest_date)-parser.parse(local_latest_date))/604800)
-            if nu_new > 0:
-                local_dump(remote_soup,HFILENAME)
-                dump_entries(remote_latest_entries[:nu_new])
-            else:
-                print 'Nothing new.'
-                sys.exit(0)
-
+        with open(HFPATH) as f:
+            home_soup = BS(f)
+            entries = home_soup.find_all('div', class_ = 'hentry')
+            for entry in entries:
+                dumpEntry(entry)
     except OSError as e:
-    # if no home page
-        if e.errno == 2:
-            print 'initiate the database'
-            initiate()
-        else:
-            raise
+        print e
+        raise
 
-    # if it's outdated then refresh. That is, reload the homepage and update the database
-    else:
-        print 'unexpected error'
 
 class QandA:
-#    try:
-    refresh()
-#    except:
-#        con.commit()
-#        cur.close()
-#        con.close()
+    try:
+        file_mod = os.path.getatime(HFPATH)
+        print 'You updated the database %s days ago. y for update homepage and n for using old homepage?[y/n] ' % str(int((time.time()-file_mod)/86400))
+        if sys.stdin.read(1) == 'y':
+            os.remove(HFPATH)
+            haveFile(HPNAME)
+            refresh()
+        elif sys.stdin.read(1) == 'n':
+            refresh()
+        else:
+            sys.exit(0)
+    except OSError as e:
+        # that episode already exists
+        if e.errno == 2:
+            print 'Seems that you should initiate database?[y/n] '
+            if sys.stdin.read(1) == 'y':
+                haveFile(HPNAME)
+                init_database()
+                refresh()
+        else:
+            sys.exit(0)
         
-    con.commit()
     cur.close()
     con.close()
 
 if __name__ == "__main__":
     QandA()
 # cannot fetch data in 2008
+
