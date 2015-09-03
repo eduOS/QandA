@@ -21,18 +21,25 @@ argparser.add_argument('dbpwd', nargs='?', default='0123456789',help='input your
 argparser.add_argument('dbserver', nargs='?', default='localhost',help='input your database server.')
 argparser.add_argument('dbuser', nargs='?', default='root',help='input your database username.')
 argparser.add_argument('dbname', nargs='?', default='QandA',help='input your database database name.')
-argparser.add_argument('soup_dir', nargs='?', default='./soupfiles',help='set the soup directory')
+argparser.add_argument('soup_dir', nargs='?', default='../QandAsoupfiles',help='set the soup directory')
 argparser.add_argument('-d','--delay',default=1,type=float,help='time to sleep between downloads, in seconds')
 
 global args
 args = argparser.parse_args()
 
-FILEPATH = args.soup_dir+'/{num}'
-HPNAME = 'programs-by-date'
-HFPATH = FILEPATH.format(num=HPNAME)
+if not os.path.exists(args.soup_dir):
+    os.makedirs(args.soup_dir)
 
-con = mdb.connect(args.dbserver,args.dbuser,args.dbpwd,args.dbname)
+FILEPATH = args.soup_dir+'/{name}'
+HPNAME = 'programs-by-date'
+HFPATH = FILEPATH.format(name=HPNAME)
+
+con = mdb.connect(args.dbserver,args.dbuser,args.dbpwd)
 cur = con.cursor()
+
+if not cur.execute("SHOW DATABASES LIKE '" + args.dbname + "'"):
+    cur.execute('CREATE DATABASE ' + args.dbname)
+cur.execute('USE ' + args.dbname)
 
 def executesql(sql, agms):
     try:
@@ -88,7 +95,7 @@ def get_new_soup():
     pass
 
 def dump_panellists(epiShortNumber):
-    with open(FILEPATH.format(num=epiShortNumber),'r') as f:
+    with open(FILEPATH.format(name=epiShortNumber),'r') as f:
         epi_soup = BS(f)
 
     presenters = epi_soup.find_all('div', class_ = 'presenter')
@@ -118,7 +125,7 @@ def dump_panellists(epiShortNumber):
     print 'succeed: ', epiShortNumber
 
 def dump_epi(epiShortNumber):
-    with open(FILEPATH.format(num=epiShortNumber),'r') as epif:
+    with open(FILEPATH.format(name=epiShortNumber),'r') as epif:
         epi_soup = BS(epif)
 
     videoLink = epi_soup.find('li', class_ = 'download')
@@ -165,7 +172,7 @@ def dump_epi(epiShortNumber):
 def haveFile(filename):
     file_handle = None
     flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
-    filepath = FILEPATH.format(num=filename)
+    filepath = FILEPATH.format(name=filename)
     try:
         file_handle = os.open(filepath,flags)
     except OSError as e:
@@ -182,7 +189,7 @@ def haveFile(filename):
         if filename == HPNAME:
             text = requests.get(HOMEPAGE).text
         else:
-            text = requests.get(EPISPAGE.format(num=filename)).text
+            text = requests.get(EPISPAGE.format(name=filename)).text
         local_dump(text, filepath)
         return False
 
@@ -258,7 +265,6 @@ class QandA:
         else:
             sys.exit(0)
     except OSError as e:
-        # that episode already exists
         if e.errno == 2:
             nput = raw_input('Seems that you should initiate database?[y/n] ') 
             if nput == 'y':
