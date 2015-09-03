@@ -87,16 +87,16 @@ def get_new_soup():
     pass
 
 def dump_panellists(epiShortNumber):
-    try:
-        with open(EFILENAME.format(num=epiShortNumber),'r') as f:
-            epi_soup = BS(f)
-    except:
-        print epiShortNumber + 'does not exist locally'
+    with open(EFILENAME.format(num=epiShortNumber),'r') as f:
+        epi_soup = BS(f)
 
     presenters = epi_soup.find_all('div', class_ = 'presenter')
 
     for presenter in presenters:
-        panel_name = presenter.find('a').text
+        try:
+            panel_name = presenter.find('a').text
+        except:
+            panel_name = presenter.find('h4').text
 
         panel_pic_ID = presenter.find('img')
         if panel_pic_ID:
@@ -114,7 +114,6 @@ def dump_panellists(epiShortNumber):
         write2sql(sql,(epiShortNumber,panel_name,))
         # the table henpan shoulbe be modified: making episode number and panellist's panel_ID as foreign key
     con.commit()
-    print epiShortNumber, 'panel committed'
 
 def dump_epi(epiShortNumber):
     epi_soup = None
@@ -127,7 +126,6 @@ def dump_epi(epiShortNumber):
         if e.errno == errno.EEXIST:
             with open(EFILENAME.format(num=epiShortNumber),'r') as file_obj:
                 epi_soup = BS(file_obj)
-                print 'that episode already exists'
         #elif e.errno == errno.ENOENT:
         #    time.sleep(0.2)
         #    text = requests.get(EPISPAGE.format(num=epiShortNumber)).text
@@ -147,8 +145,6 @@ def dump_epi(epiShortNumber):
         with os.fdopen(file_handle,'w') as file_obj:
             file_obj.write(text.encode('UTF-8'))
         epi_soup = BS(text)
-    finally:
-        print 'soup loaded'
 
     videoLink = epi_soup.find('li', class_ = 'download')
     if videoLink:
@@ -164,24 +160,30 @@ def dump_epi(epiShortNumber):
     # don't know where to put this 
     #greetings = qandas[0]
 
+    qnu=1
     for qanda in qandas[1:]:
         # don't use match too much, manage the transcript line by line
         lines = qanda.replace('</span>','\n').replace('\n\n','\n').split('\n')
         try:
-            match = re.match(r'"(q\d{1,2})">(.*)\n{,1}',lines[0]).groups()
+            match = re.match(r'.+(q\d{1,2}).+>(.*)\n{,1}',lines[0]).groups()
             qNumber = match[0]
             topic = match[1]
         except:
-            print 'rules of the changed for ', epiShortNumber
-            print qanda
-            raise
+            try: 
+                match = re.match(r'.+(q\d{,2}).+>(.*)\n{,1}',lines[0]).groups()
+                qNumber = match[0] + str(qnu)
+                qnu += 1
+                topic = match[1]
+            except:
+                print 'rules of the changed for ', epiShortNumber
+                print qanda
+                raise
         question = lines[1]
         answers = '\n'.join(lines[2:])
         # later each line of the answer can be dumpted to database seperately
         sql = 'INSERT INTO qanda (epiShortNumber, questionNumber, topic, question, answers) VALUES(%s,%s,%s,%s,%s)'
         write2sql(sql,(epiShortNumber,qNumber,topic,question,answers))
     con.commit()
-    print epiShortNumber, 'scripts committed'
     dump_panellists(epiShortNumber)
 
 def dump_entries(entries):
@@ -202,10 +204,12 @@ def dump_entries(entries):
 def initiate():
     # the function in dump_epi should be divided for the file date check function
     text = requests.get(HOMEPAGE).text
+    local_dump(text, HFILENAME)
     remote_soup = BS(text)
     #with open(HFILENAME) as f:
     #    remote_soup = BS(f)
-    #init_database()
+
+    init_database()
     #if this file doesn't exist then initiate the database, it's too dogmatic
     remote_latest_entries = remote_soup.find_all('div', class_ = 'hentry')
     # not return but dump the database
